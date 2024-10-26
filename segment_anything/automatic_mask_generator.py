@@ -209,7 +209,7 @@ class SamAutomaticMaskGenerator:
         # Remove duplicate masks between crops
         if len(crop_boxes) > 1:
             # Prefer masks from smaller crops
-            scores = 1 / box_area(data["crop_boxes"])
+            scores = box_area(data["crop_boxes"])  # Prefers larger masks over smaller ones
             scores = scores.to(data["boxes"].device)
             keep_by_nms = batched_nms(
                 data["boxes"].float(),
