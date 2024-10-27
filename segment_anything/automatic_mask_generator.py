@@ -282,6 +282,11 @@ class SamAutomaticMaskGenerator:
             multimask_output=True,
             return_logits=True,
         )
+        # Check the number of masks and select only the last one
+        if masks.shape[1] > 1:
+            # Keep only the highest index mask for each batch item
+            masks = masks[:, -1:, :, :]  # Selects the last mask in the second dimension
+            iou_preds = iou_preds[:, -1:]  # Select the corresponding IoU prediction
 
         # Serialize predictions and store in MaskData
         data = MaskData(
