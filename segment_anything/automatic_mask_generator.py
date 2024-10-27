@@ -49,6 +49,7 @@ class SamAutomaticMaskGenerator:
         point_grids: Optional[List[np.ndarray]] = None,
         min_mask_region_area: int = 0,
         output_mode: str = "binary_mask",
+        target_area: Optional[int] = None,  # New parameter for target area
     ) -> None:
         """
         Using a SAM model, generates masks for the entire image.
@@ -132,7 +133,7 @@ class SamAutomaticMaskGenerator:
         self.crop_n_points_downscale_factor = crop_n_points_downscale_factor
         self.min_mask_region_area = min_mask_region_area
         self.output_mode = output_mode
-
+        self.target_area = target_area
     @torch.no_grad()
     def generate(self, image: np.ndarray) -> List[Dict[str, Any]]:
         """
@@ -282,11 +283,17 @@ class SamAutomaticMaskGenerator:
             multimask_output=True,
             return_logits=True,
         )
-        # Check the number of masks and select only the last one
-        if masks.shape[1] > 1:
-            # Keep only the highest index mask for each batch item
-            masks = masks[:, -1:, :, :]  # Selects the last mask in the second dimension
-            iou_preds = iou_preds[:, -1:]  # Select the corresponding IoU prediction
+
+        # Compute areas for each mask to select the one closest to target_area
+        if self.target_area is not None:
+            # Calculate area for each mask in the batch
+            areas = [mask.sum().item() for mask in masks[0]]
+            # Find the index of the mask with area closest to target_area
+            closest_index = min(range(len(areas)), key=lambda i: abs(areas[i] - self.target_area))
+            
+            # Keep only the mask with area closest to target_area
+            masks = masks[:, closest_index:closest_index+1, :, :]
+            iou_preds = iou_preds[:, closest_index:closest_index+1]
 
         # Serialize predictions and store in MaskData
         data = MaskData(
@@ -295,6 +302,7 @@ class SamAutomaticMaskGenerator:
             points=torch.as_tensor(points.repeat(masks.shape[1], axis=0)),
         )
         del masks
+
 
         # Filter by predicted IoU
         if self.pred_iou_thresh > 0.0:
